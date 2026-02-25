@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-generate-bilingual-bg2ee.py
-============================
-Merge two language versions of Baldur's Gate II Enhanced Edition's
+generate-bilingual-bg1and2ee.py
+================================
+Merge two language versions of Baldur's Gate I/II Enhanced Edition's
 dialog.tlk (and dialogf.tlk) into a single bilingual file.
 
 Every string will display BOTH languages, e.g.:
@@ -11,20 +11,27 @@ Every string will display BOTH languages, e.g.:
     ---
     You are not in the right frame of mind.
 
+Note on dialogf.tlk
+-------------------
+    dialogf.tlk exists only for gendered languages (e.g. de_DE, fr_FR).
+    Languages like en_US only have dialog.tlk.  If the secondary language
+    is missing dialogf.tlk, dialog.tlk from that language is used instead
+    as the secondary source for merging dialogf.tlk.
+
 Usage
 -----
-    python generate-bilingual-bg2ee.py \\
-        --game-dir "C:\\GOG Games\\Baldur's Gate II - Enhanced Edition" \\
+    python generate-bilingual-bg1and2ee.py \\
+        --game-dir "path/to/game" \\
         --primary-lang de_DE \\
         --secondary-lang en_US \\
         --separator "\\n---\\n" \\
         --output-dir ./output
 
     # Dump first N entries of a TLK:
-    python generate-bilingual-bg2ee.py --dump dialog.tlk [--max 200]
+    python generate-bilingual-bg1and2ee.py --dump dialog.tlk [--max 200]
 
     # Run built-in self-test:
-    python generate-bilingual-bg2ee.py --test
+    python generate-bilingual-bg1and2ee.py --test
 """
 
 import argparse
@@ -149,7 +156,11 @@ def process_tlk_file(
 ) -> bool:
     """
     Process one TLK file (dialog.tlk or dialogf.tlk).
-    Returns True if successful, False if either source file was not found.
+
+    For dialogf.tlk: if the secondary language doesn't have it (e.g. en_US),
+    falls back to the secondary language's dialog.tlk as the secondary source.
+
+    Returns True if successful, False if the primary file was not found.
     """
     primary_path   = os.path.join(game_dir, 'lang', primary_lang,   filename)
     secondary_path = os.path.join(game_dir, 'lang', secondary_lang, filename)
@@ -158,13 +169,29 @@ def process_tlk_file(
     if not os.path.exists(primary_path):
         print(f"  Skipping {filename}: not found at {primary_path}")
         return False
+
+    # For dialogf.tlk: fall back to dialog.tlk if secondary has no dialogf.tlk
+    secondary_fallback = False
     if not os.path.exists(secondary_path):
-        print(f"  Skipping {filename}: not found at {secondary_path}")
-        return False
+        if filename == 'dialogf.tlk':
+            fallback_path = os.path.join(game_dir, 'lang', secondary_lang, 'dialog.tlk')
+            if os.path.exists(fallback_path):
+                print(f"  Note: {secondary_lang} has no {filename}, "
+                      f"falling back to dialog.tlk")
+                secondary_path = fallback_path
+                secondary_fallback = True
+            else:
+                print(f"  Skipping {filename}: no {filename} or dialog.tlk "
+                      f"found for {secondary_lang}")
+                return False
+        else:
+            print(f"  Skipping {filename}: not found at {secondary_path}")
+            return False
 
     print(f"\nProcessing {filename}:")
     print(f"  Primary:   {primary_path}")
-    print(f"  Secondary: {secondary_path}")
+    print(f"  Secondary: {secondary_path}"
+          + (" (fallback from dialog.tlk)" if secondary_fallback else ""))
 
     primary   = TlkFile.from_file(primary_path,   encoding=encoding)
     secondary = TlkFile.from_file(secondary_path, encoding=encoding)
@@ -257,7 +284,7 @@ def list_installed_languages(game_dir: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Generate a bilingual dialog.tlk for Baldur\'s Gate II Enhanced Edition.',
+        description='Generate a bilingual dialog.tlk for Baldur\'s Gate I/II Enhanced Edition.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -359,7 +386,7 @@ def main():
 
     separator = parse_separator(args.separator)
 
-    print(f"BG2EE Bilingual TLK Generator")
+    print(f"BG1/2 Bhaalingual Edition — TLK Generator")
     print(f"  Game dir:       {args.game_dir}")
     print(f"  Primary lang:   {args.primary_lang}")
     print(f"  Secondary lang: {args.secondary_lang}")
@@ -395,7 +422,7 @@ def main():
         print(f"\nInstalling into game ({args.primary_lang})...")
         install_output(args.game_dir, args.primary_lang, args.output_dir, processed)
         print("\nInstallation complete.")
-        print("  To restore originals: python generate-bilingual-bg2ee.py "
+        print("  To restore originals: python generate-bilingual-bg1and2ee.py "
               f"--game-dir \"{args.game_dir}\" --primary-lang {args.primary_lang} --restore")
     else:
         print("\nTo install into the game, copy the merged file(s) to:")
