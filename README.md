@@ -60,7 +60,7 @@ The `--install` flag copies the merged files into `lang/de_DE/` and backs up the
 | `--game-dir` | required | Path to BG:EE/BG2:EE installation |
 | `--primary-lang` | required | Language shown first (e.g. `de_DE`) |
 | `--secondary-lang` | required | Language shown second (e.g. `en_US`) |
-| `--separator` | `\n---\n` | Text between the two languages |
+| `--separator` | `\n` | Text between the two languages |
 | `--swap` | off | Swap primary/secondary order |
 | `--output-dir` | `./output` | Where to write merged TLK files |
 | `--encoding` | `cp1252` | File encoding (`cp1252` or `utf-8`) |
@@ -95,4 +95,4 @@ Strings that are identical in both languages (or empty) are kept as-is to avoid 
 
 - **Female dialogue**: `dialogf.tlk` is processed automatically if present in both language dirs.
 - **Mods**: Other WeiDU mods that append to `dialog.tlk` may need to be reinstalled after this step.
-- **Compatibility**: Tested with BG2:EE v2.6. The TLK format has been stable since the original BG2.
+- **Compatibility**: Tested with BG2:EE v2.6. The TLK format has been stable since the original BG2. The game runs a special encoding for certain languages, so you can't combine languages from different encodings. I haven't tested it but I assume this applies to CJK and cyrillic alphabet languages.

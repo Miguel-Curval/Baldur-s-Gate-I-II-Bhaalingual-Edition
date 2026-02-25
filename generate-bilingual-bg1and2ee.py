@@ -309,8 +309,8 @@ def main():
                         help='Secondary language code (shown second), e.g. en_US')
 
     # --- Options ---
-    parser.add_argument('--separator', metavar='SEP', default='\\n---\\n',
-                        help='Separator between languages (default: \\\\n---\\\\n). Supports \\\\n and \\\\t.')
+    parser.add_argument('--separator', metavar='SEP', default='\\n',
+                        help='Separator between languages (default: \\\\n). Supports \\\\n and \\\\t.')
     parser.add_argument('--swap', action='store_true',
                         help='Swap primary/secondary order in output')
     parser.add_argument('--output-dir', metavar='PATH', default='./output',
@@ -344,9 +344,9 @@ def main():
             primary.entries.append(TlkEntry(text=p, flags=FLAG_TEXT if p else 0))
             secondary.entries.append(TlkEntry(text=s, flags=FLAG_TEXT if s else 0))
 
-        merged = merge_tlks(primary, secondary, separator='\n---\n')
+        merged = merge_tlks(primary, secondary, separator='\n')
 
-        assert merged.entries[0].text == "Hallo Welt\n---\nHello World", \
+        assert merged.entries[0].text == "Hallo Welt\nHello World", \
             f"Merge test 0 failed: {merged.entries[0].text!r}"
         assert merged.entries[1].text == "", "Merge test 1 failed"
         assert merged.entries[2].text == "Gleicher Text", "Merge test 2 failed"
