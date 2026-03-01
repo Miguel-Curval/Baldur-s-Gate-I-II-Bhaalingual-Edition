@@ -25,6 +25,7 @@ Usage
         --primary-lang de_DE \\
         --secondary-lang en_US \\
         --separator "\\n---\\n" \\
+        --inline-separator " ~ " \\
         --output-dir ./output
 
     # Dump first N entries of a TLK:
@@ -54,6 +55,7 @@ def merge_tlks(
     primary: TlkFile,
     secondary: TlkFile,
     separator: str = '\n',
+    inline_separator: str = ' ~ ',
     swap: bool = False,
 ) -> TlkFile:
     """
@@ -61,8 +63,9 @@ def merge_tlks(
 
     For each entry:
       - If both texts are identical (or one is empty), keep as-is.
-      - Otherwise combine:  primary_text + separator + secondary_text
-        (or swapped if swap=True)
+      - Otherwise combine them. Uses `inline_separator` if the string is short
+        and lacks dialogue punctuation (to prevent OS path creation errors
+        when saving the game, as the location name string is used for the folder).
     """
     if len(primary) != len(secondary):
         print(
@@ -118,9 +121,24 @@ def merge_tlks(
 
         else:
             # Both have different text — combine them
-            first  = s_entry.text if swap else p_entry.text
-            second = p_entry.text if swap else s_entry.text
-            combined = first + separator + second
+            first  = s_text if swap else p_text
+            second = p_text if swap else s_text
+
+            # Determine whether to use inline separator to prevent savegame crashes
+            # (Area names / Auto-save strings are used for Windows folder generation,
+            # which breaks if it contains a newline. They are typically short and lack punctuation).
+            use_inline = True
+            if len(first) > 60 or len(second) > 60:
+                use_inline = False
+            elif '\n' in first or '\r' in first or '\n' in second or '\r' in second:
+                use_inline = False
+            else:
+                punct = ('.', '!', '?', '"', "'", '»', '”', '…')
+                if first.endswith(punct) or second.endswith(punct):
+                    use_inline = False
+
+            sep = inline_separator if use_inline else separator
+            combined = first + sep + second
 
             merged.entries.append(TlkEntry(
                 text=combined,
@@ -151,6 +169,7 @@ def process_tlk_file(
     secondary_lang: str,
     output_dir: str,
     separator: str,
+    inline_separator: str,
     swap: bool,
     encoding: str,
 ) -> bool:
@@ -198,7 +217,12 @@ def process_tlk_file(
 
     print(f"  Primary entries: {len(primary)}, Secondary entries: {len(secondary)}")
 
-    merged = merge_tlks(primary, secondary, separator=separator, swap=swap)
+    merged = merge_tlks(
+        primary, secondary,
+        separator=separator,
+        inline_separator=inline_separator,
+        swap=swap
+    )
 
     os.makedirs(output_dir, exist_ok=True)
     merged.to_file(output_path, encoding=encoding)
@@ -309,8 +333,10 @@ def main():
                         help='Secondary language code (shown second), e.g. en_US')
 
     # --- Options ---
-    parser.add_argument('--separator', metavar='SEP', default='\\n',
-                        help='Separator between languages (default: \\\\n). Supports \\\\n and \\\\t.')
+    parser.add_argument('--separator', metavar='SEP', default='\\n---\\n',
+                        help='Separator between languages (default: \\\\n---\\\\n). Supports \\\\n and \\\\t.')
+    parser.add_argument('--inline-separator', metavar='SEP', default=' ~ ',
+                        help='Separator for short UI/Location strings to prevent save path errors (default: " ~ ").')
     parser.add_argument('--swap', action='store_true',
                         help='Swap primary/secondary order in output')
     parser.add_argument('--output-dir', metavar='PATH', default='./output',
@@ -344,9 +370,9 @@ def main():
             primary.entries.append(TlkEntry(text=p, flags=FLAG_TEXT if p else 0))
             secondary.entries.append(TlkEntry(text=s, flags=FLAG_TEXT if s else 0))
 
-        merged = merge_tlks(primary, secondary, separator='\n')
+        merged = merge_tlks(primary, secondary, separator='\n---\n', inline_separator=' ~ ')
 
-        assert merged.entries[0].text == "Hallo Welt\nHello World", \
+        assert merged.entries[0].text == "Hallo Welt ~ Hello World", \
             f"Merge test 0 failed: {merged.entries[0].text!r}"
         assert merged.entries[1].text == "", "Merge test 1 failed"
         assert merged.entries[2].text == "Gleicher Text", "Merge test 2 failed"
@@ -385,12 +411,14 @@ def main():
         parser.error('--secondary-lang is required')
 
     separator = parse_separator(args.separator)
+    inline_sep = parse_separator(args.inline_separator)
 
     print(f"BG1/2 Bhaalingual Edition — TLK Generator")
     print(f"  Game dir:       {args.game_dir}")
     print(f"  Primary lang:   {args.primary_lang}")
     print(f"  Secondary lang: {args.secondary_lang}")
     print(f"  Separator:      {args.separator!r}")
+    print(f"  Inline sep:     {args.inline_separator!r}")
     print(f"  Output dir:     {args.output_dir}")
     if args.swap:
         print(f"  (languages swapped)")
@@ -406,6 +434,7 @@ def main():
             secondary_lang=args.secondary_lang,
             output_dir=args.output_dir,
             separator=separator,
+            inline_separator=inline_sep,
             swap=args.swap,
             encoding=args.encoding,
         )

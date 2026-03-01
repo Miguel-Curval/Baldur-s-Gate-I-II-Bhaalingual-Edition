@@ -61,6 +61,7 @@ The `--install` flag copies the merged files into `lang/de_DE/` and backs up the
 | `--primary-lang` | required | Language shown first (e.g. `de_DE`) |
 | `--secondary-lang` | required | Language shown second (e.g. `en_US`) |
 | `--separator` | `\n` | Text between the two languages |
+| `--inline-separator` | ` ~ ` | Text between short UI/Location strings. Used to prevent **save-game creation crashes**. |
 | `--swap` | off | Swap primary/secondary order |
 | `--output-dir` | `./output` | Where to write merged TLK files |
 | `--encoding` | `cp1252` | File encoding (`cp1252` or `utf-8`) |
@@ -87,7 +88,8 @@ python generate-bilingual-bg2ee.py \
 
 All BG:EE/BG2:EE text is stored in `dialog.tlk` (and `dialogf.tlk` for female character lines) inside the active language folder. The game looks up strings by numeric index. By replacing `dialog.tlk` with a merged bilingual version, every piece of text the game displays shows both languages.
 
-Strings that are identical in both languages (or empty) are kept as-is to avoid redundant output.
+- Strings that are identical in both languages (or empty) are kept as-is to avoid redundant output.
+- **Save Game Crash Fix**: The game uses "Area Name" strings and the "Auto-Save" string to physically create save-game folders on your PC. If these strings contain newlines (`\n`), the OS refuses to create the folder and the game crashes while autosaving. To fix this, the script automatically detects short, non-dialogue strings and merges them with an inline separator (` ~ `) instead of a newline.
 
 ---
 
