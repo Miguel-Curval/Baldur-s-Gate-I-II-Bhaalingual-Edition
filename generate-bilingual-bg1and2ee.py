@@ -21,18 +21,26 @@ Note on dialogf.tlk
 Usage
 -----
     python generate-bilingual-bg1and2ee.py \\
-        --game-dir "path/to/game" \\
-        --primary-lang de_DE \\
-        --secondary-lang en_US \\
-        --separator "\\n---\\n" \\
-        --inline-separator " ~ " \\
-        --output-dir ./output
+        -g "path/to/game" \\
+        -p de_DE \\
+        -s en_US \\
+        -S "\\n" \\
+        -I " ~ " \\
+        -o ./output
+
+    Short flags: -g/--game-dir, -p/--primary-lang, -s/--secondary-lang,
+                 -o/--output-dir, -e/--encoding, -S/--separator,
+                 -I/--inline-separator, -w/--swap, -i/--install, -m/--max,
+                 -t/--test, -d/--dump, -l/--list-langs, -r/--restore
+
+    # Restore originals (no --primary-lang needed):
+    python generate-bilingual-bg1and2ee.py -r -g "path/to/game"
 
     # Dump first N entries of a TLK:
-    python generate-bilingual-bg1and2ee.py --dump dialog.tlk [--max 200]
+    python generate-bilingual-bg1and2ee.py -d dialog.tlk [-m 200]
 
     # Run built-in self-test:
-    python generate-bilingual-bg1and2ee.py --test
+    python generate-bilingual-bg1and2ee.py -t
 """
 
 import argparse
@@ -71,17 +79,17 @@ def merge_tlks(
         print(
             f"  WARNING: entry count mismatch — "
             f"primary={len(primary)}, secondary={len(secondary)}. "
-            f"Using minimum."
+            f"Using maximum to preserve added mod strings."
         )
 
-    count = min(len(primary), len(secondary))
+    count = max(len(primary), len(secondary))
     merged = TlkFile(language_id=primary.language_id)
 
     stats = dict(total=count, combined=0, kept=0, empty=0)
 
     for i in range(count):
-        p_entry = primary.entries[i]
-        s_entry = secondary.entries[i]
+        p_entry = primary.entries[i] if i < len(primary) else TlkEntry()
+        s_entry = secondary.entries[i] if i < len(secondary) else TlkEntry()
 
         p_text = p_entry.text.strip()
         s_text = s_entry.text.strip()
@@ -110,12 +118,14 @@ def merge_tlks(
 
         elif not p_text:
             # Primary is empty, secondary has text — keep secondary
+            # Try to grab sound ref from primary, else secondary
+            sound_ref = p_entry.sound_resref if p_entry.has_sound() else s_entry.sound_resref
             merged.entries.append(TlkEntry(
                 text=s_entry.text,
-                sound_resref=p_entry.sound_resref,
-                flags=p_entry.flags,
-                volume_variance=p_entry.volume_variance,
-                pitch_variance=p_entry.pitch_variance,
+                sound_resref=sound_ref,
+                flags=s_entry.flags,
+                volume_variance=s_entry.volume_variance,
+                pitch_variance=s_entry.pitch_variance,
             ))
             stats['kept'] += 1
 
@@ -140,10 +150,13 @@ def merge_tlks(
             sep = inline_separator if use_inline else separator
             combined = first + sep + second
 
+            # OR both entries' flags so FLAG_TOKEN is preserved from either side.
+            # Without this, tokens like <PRO_HISHER>/<LADYLORD> in the secondary
+            # language are never substituted by the engine and render literally.
             merged.entries.append(TlkEntry(
                 text=combined,
                 sound_resref=p_entry.sound_resref,
-                flags=p_entry.flags | FLAG_TEXT,
+                flags=p_entry.flags | s_entry.flags | FLAG_TEXT,
                 volume_variance=p_entry.volume_variance,
                 pitch_variance=p_entry.pitch_variance,
             ))
@@ -264,18 +277,44 @@ def install_output(
         shutil.copy2(src, dst)
 
 
-def restore_backup(game_dir: str, primary_lang: str, filenames: list) -> None:
-    """Restore the original .bak files."""
-    lang_dir = os.path.join(game_dir, 'lang', primary_lang)
-    for filename in filenames:
-        dst = os.path.join(lang_dir, filename)
-        bak = dst + '.bak'
-        if os.path.exists(bak):
-            print(f"  Restoring {bak} → {dst}")
-            shutil.copy2(bak, dst)
-            os.remove(bak)
-        else:
-            print(f"  No backup found for {filename}")
+def restore_backup(game_dir: str, primary_lang: str = None) -> None:
+    """
+    Restore .bak files found under game_dir/lang/*/.
+
+    If primary_lang is given, only that language directory is restored.
+    Otherwise every language directory is scanned.
+    """
+    lang_root = os.path.join(game_dir, 'lang')
+    if not os.path.isdir(lang_root):
+        print(f"  ERROR: lang directory not found at {lang_root}")
+        return
+
+    if primary_lang:
+        lang_dirs = [primary_lang]
+    else:
+        lang_dirs = sorted(
+            d for d in os.listdir(lang_root)
+            if os.path.isdir(os.path.join(lang_root, d))
+        )
+
+    restored_any = False
+    for lang in lang_dirs:
+        lang_dir = os.path.join(lang_root, lang)
+        if not os.path.isdir(lang_dir):
+            print(f"  WARNING: language directory not found: {lang_dir}")
+            continue
+        for filename in ('dialog.tlk', 'dialogf.tlk'):
+            bak = os.path.join(lang_dir, filename + '.bak')
+            dst = os.path.join(lang_dir, filename)
+            if os.path.exists(bak):
+                print(f"  Restoring {bak} → {dst}")
+                shutil.copy2(bak, dst)
+                os.remove(bak)
+                restored_any = True
+
+    if not restored_any:
+        scope = primary_lang if primary_lang else 'any language directory'
+        print(f"  No backup files (.bak) found under {scope}.")
 
 
 # --------------------------------------------------------------------------- #
@@ -315,39 +354,40 @@ def main():
 
     # --- Mode flags ---
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument('--test', action='store_true',
+    mode.add_argument('-t', '--test', action='store_true',
                       help='Run self-test and exit')
-    mode.add_argument('--dump', metavar='TLK_FILE',
+    mode.add_argument('-d', '--dump', metavar='TLK_FILE',
                       help='Dump contents of a TLK file and exit')
-    mode.add_argument('--list-langs', action='store_true',
+    mode.add_argument('-l', '--list-langs', action='store_true',
                       help='List installed language directories and exit')
-    mode.add_argument('--restore', action='store_true',
-                      help='Restore .bak backup files (undo a previous install)')
+    mode.add_argument('-r', '--restore', action='store_true',
+                      help='Restore .bak backup files (undo a previous install). '
+                           'Only requires --game-dir.')
 
     # --- Core args ---
-    parser.add_argument('--game-dir', metavar='PATH',
-                        help='Path to BG2:EE installation directory')
-    parser.add_argument('--primary-lang', metavar='LANG',
+    parser.add_argument('-g', '--game-dir', metavar='PATH',
+                        help='Path to BG:EE/BG2:EE installation directory')
+    parser.add_argument('-p', '--primary-lang', metavar='LANG',
                         help='Primary language code (shown first), e.g. de_DE')
-    parser.add_argument('--secondary-lang', metavar='LANG',
+    parser.add_argument('-s', '--secondary-lang', metavar='LANG',
                         help='Secondary language code (shown second), e.g. en_US')
 
     # --- Options ---
-    parser.add_argument('--separator', metavar='SEP', default='\\n---\\n',
-                        help='Separator between languages (default: \\\\n---\\\\n). Supports \\\\n and \\\\t.')
-    parser.add_argument('--inline-separator', metavar='SEP', default=' ~ ',
+    parser.add_argument('-S', '--separator', metavar='SEP', default='\\n',
+                        help='Separator between languages (default: \\\\n). Supports \\\\n and \\\\t.')
+    parser.add_argument('-I', '--inline-separator', metavar='SEP', default=' ~ ',
                         help='Separator for short UI/Location strings to prevent save path errors (default: " ~ ").')
-    parser.add_argument('--swap', action='store_true',
+    parser.add_argument('-w', '--swap', action='store_true',
                         help='Swap primary/secondary order in output')
-    parser.add_argument('--output-dir', metavar='PATH', default='./output',
+    parser.add_argument('-o', '--output-dir', metavar='PATH', default='./output',
                         help='Output directory for merged TLK files (default: ./output)')
-    parser.add_argument('--encoding', metavar='ENC', default='cp1252',
+    parser.add_argument('-e', '--encoding', metavar='ENC', default='cp1252',
                         help='Text encoding of the TLK files (default: cp1252). '
                              'Use utf-8 for some Enhanced Edition installs.')
-    parser.add_argument('--install', action='store_true',
+    parser.add_argument('-i', '--install', action='store_true',
                         help='After merging, install merged files into the game '
                              '(backs up originals as *.bak)')
-    parser.add_argument('--max', metavar='N', type=int, default=100,
+    parser.add_argument('-m', '--max', metavar='N', type=int, default=100,
                         help='Max entries to show with --dump (default: 100)')
 
     args = parser.parse_args()
@@ -397,9 +437,9 @@ def main():
 
     # --- Restore backups ---
     if args.restore:
-        if not args.game_dir or not args.primary_lang:
-            parser.error('--restore requires --game-dir and --primary-lang')
-        restore_backup(args.game_dir, args.primary_lang, ['dialog.tlk', 'dialogf.tlk'])
+        if not args.game_dir:
+            parser.error('--restore requires --game-dir')
+        restore_backup(args.game_dir, args.primary_lang)  # primary_lang is optional
         return
 
     # --- Normal merge mode ---

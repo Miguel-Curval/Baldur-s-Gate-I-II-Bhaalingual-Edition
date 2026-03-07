@@ -19,7 +19,7 @@ You are not in the right frame of mind.
 
 ```bash
 python generate-bilingual-bg2ee.py \
-    --game-dir "path to game" \
+    -g "path to game" \
     --list-langs
 ```
 
@@ -31,10 +31,10 @@ To install additional languages, launch the game and switch the language via the
 
 ```bash
 python generate-bilingual-bg2ee.py \
-    --game-dir "path to game" \
-    --primary-lang de_DE \
-    --secondary-lang en_US \
-    --output-dir ./output
+    -g "path to game" \
+    -p de_DE \
+    -s en_US \
+    -o ./output
 ```
 
 This generates merged `.tlk` files in `./output/`. The primary language appears on top; the secondary appears below, separated by `---`.
@@ -43,10 +43,10 @@ This generates merged `.tlk` files in `./output/`. The primary language appears 
 
 ```bash
 python generate-bilingual-bg2ee.py \
-    --game-dir "path to game" \
-    --primary-lang de_DE \
-    --secondary-lang en_US \
-    --install
+    -g "path to game" \
+    -p de_DE \
+    -s en_US \
+    -i
 ```
 
 The `--install` flag copies the merged files into `lang/de_DE/` and backs up the originals as `dialog.tlk.bak`.
@@ -55,32 +55,36 @@ The `--install` flag copies the merged files into `lang/de_DE/` and backs up the
 
 ## All Options
 
-| Flag | Default | Description |
-|---|---|---|
-| `--game-dir` | required | Path to BG:EE/BG2:EE installation |
-| `--primary-lang` | required | Language shown first (e.g. `de_DE`) |
-| `--secondary-lang` | required | Language shown second (e.g. `en_US`) |
-| `--separator` | `\n` | Text between the two languages |
-| `--inline-separator` | ` ~ ` | Text between short UI/Location strings. Used to prevent **save-game creation crashes**. |
-| `--swap` | off | Swap primary/secondary order |
-| `--output-dir` | `./output` | Where to write merged TLK files |
-| `--encoding` | `cp1252` | File encoding (`cp1252` or `utf-8`) |
-| `--install` | off | Install merged files into the game |
-| `--restore` | off | Restore `.bak` backup files |
-| `--dump TLK_FILE` | — | Print TLK contents (for debugging) |
-| `--list-langs` | — | List installed language dirs |
-| `--test` | — | Run self-test |
+| Flag | Short | Default | Description |
+|---|---|---|---|
+| `--game-dir` | `-g` | required | Path to BG:EE/BG2:EE installation |
+| `--primary-lang` | `-p` | required | Language shown first (e.g. `de_DE`) |
+| `--secondary-lang` | `-s` | required | Language shown second (e.g. `en_US`) |
+| `--separator` | `-S` | `\n` | Text between the two languages |
+| `--inline-separator` | `-I` | ` ~ ` | Text between short UI/Location strings. Used to prevent **save-game creation crashes**. |
+| `--swap` | `-w` | off | Swap primary/secondary order |
+| `--output-dir` | `-o` | `./output` | Where to write merged TLK files |
+| `--encoding` | `-e` | `cp1252` | File encoding (`cp1252` or `utf-8`) |
+| `--install` | `-i` | off | Install merged files into the game |
+| `--restore` | `-r` | off | Restore `.bak` backup files. `-g` required; `-p` optional (omit to restore all languages) |
+| `--dump TLK_FILE` | `-d` | — | Print TLK contents (for debugging) |
+| `--max` | `-m` | 100 | Max entries to show with `--dump` |
+| `--list-langs` | `-l` | — | List installed language dirs |
+| `--test` | `-t` | — | Run self-test |
 
 ---
 
 ## Restoring Originals
 
 ```bash
-python generate-bilingual-bg2ee.py \
-    --game-dir "path to game" \
-    --primary-lang de_DE \
-    --restore
+# Restore only one language:
+python generate-bilingual-bg2ee.py -r -g "path to game" -p de_DE
+
+# Restore all languages at once (omit -p):
+python generate-bilingual-bg2ee.py -r -g "path to game"
 ```
+
+If `-p`/`--primary-lang` is omitted, every language directory under `lang/` is scanned and all `.bak` files are restored.
 
 ---
 
@@ -95,6 +99,9 @@ All BG:EE/BG2:EE text is stored in `dialog.tlk` (and `dialogf.tlk` for female ch
 
 ## Notes
 
-- **Female dialogue**: `dialogf.tlk` is processed automatically if present in both language dirs.
-- **Mods**: Other WeiDU mods that append to `dialog.tlk` may need to be reinstalled after this step.
+> [!WARNING]
+> **Always restore your original TLK files before installing, reinstalling, or uninstalling anything with WeiDU.**
+> WeiDU mods patch `dialog.tlk` directly. If your bilingual file is in place, WeiDU will patch the bilingual strings instead of the originals, producing corrupted or duplicated text. Run `--restore` first, apply your mods, then re-run the bilingual generator.
+
+- **Mods**: After installing WeiDU mods, some mod-added strings will only appear in your primary language (the secondary translation won't exist for those entries). This is expected — only vanilla strings are bilingual; mod strings appear in whichever language the mod was installed with.
 - **Compatibility**: Tested with BG2:EE v2.6. The TLK format has been stable since the original BG2. The game runs a special encoding for certain languages, so you can't combine languages from different encodings. I haven't tested it but I assume this applies to CJK and cyrillic alphabet languages.
